@@ -1,6 +1,7 @@
 (ns day17
   (:require [clojure.java.io :as io]
-            [clojure.test :as test]))
+            [clojure.test :as test])
+  (:import [java.util PriorityQueue]))
 
 (defn read-field [input]
   (with-open [rdr (io/reader (str "assets/" input))]
@@ -46,34 +47,48 @@
   (->> [">" "v"]
        (map #(get distances [x y %]))))
 
-(defn dijkstra [field adjacent-f finished? distances [[x y dir dist :as pos] & queue]]
-  (cond
-    ; Out of hypothesis.
-    (nil? pos) distances
+; PriorityQueue of [distance [x y] direction] (we keep distance first to define sort order).
+(def queue (PriorityQueue. []))
 
-    ; Find a way to get to the destination.
-    (finished? [x y dir]) distances
+(defn dijkstra
+  ([field adjacent-f finished? start]
+   (.clear queue)
+   (doseq [[[x y] dir] start]
+     (.add queue [0 [x y] dir]))
+   (dijkstra [field adjacent-f finished?] {}))
 
-    :else
-    (let [[distances' queue']
-          (->> (adjacent-f x y dir)
-               (map (fn [[x y dir]] [x y dir (at field x y)]))
-               (remove #(nil? (last %)))
-               (map (fn [[x y dir dist']] [x y dir (+ dist dist')]))
-               (remove (fn [[x y dir dist]] (> dist (get-dist distances [x y dir]))))
-               (reduce (fn [[distances' queue'] [x y dir dist]]
-                         [(assoc distances' [x y dir] dist) (conj queue' [x y dir dist])])
-                       [distances queue])
-               )]
-      ;(println (count queue') (count distances'))
-      (recur field adjacent-f finished? distances' (fix-priority queue')))))
+  ([[field adjacent-f finished? :as task-descriptor] distances]
+   ;(println (.size queue) (count distances))
+   (let [[dist [x y] dir :as pos] (.poll queue)]
+     (cond
+       ; Out of hypothesis.
+       (nil? pos) distances
+
+       ; Found a way to get to the destination.
+       (finished? [x y dir]) distances
+
+       ; We've already been in [x y] with given direction earlier. No need to elaborate.
+       (> dist (get-dist distances [x y dir]))
+       (recur task-descriptor distances)
+
+       :else
+       (->> (adjacent-f x y dir)
+            (map (fn [[x y dir]] [x y dir (at field x y)]))
+            (remove #(nil? (last %)))
+            (map (fn [[x y dir dist']] [x y dir (+ dist dist')]))
+            (remove (fn [[x y dir dist]] (>= dist (get-dist distances [x y dir]))))
+            (reduce (fn [distances' [x y dir dist]]
+                      (.add queue [dist [x y] dir])
+                      (assoc distances' [x y dir] dist))
+                    distances)
+            (recur task-descriptor))))))
 
 (defn solve1 [input]
   (let [field (read-field input)
         max-x (dec (count field))
         max-y (dec (count (first field)))
-        finished? #(= [max-x max-y] (butlast %))]
-    (->> (dijkstra field adjacent finished? {} [[0 0 ">" 0] [0 0 "v" 0]])
+        finished? (fn [[x y _d]] (= [x y] [max-x max-y]))]
+    (->> (dijkstra field adjacent finished? [[[0 0] ">"] [[0 0] "v"]])
          (get-dest-distances [max-x max-y])
          (remove nil?)
          (reduce min))))
@@ -113,7 +128,7 @@
                     (and (= [x y] [max-x max-y])
                          (>= n 4))
                     )]
-    (->> (dijkstra field adjacent-large finished? {} [[0 0 [">" 1] 0] [0 0 ["v" 1] 0]])
+    (->> (dijkstra field adjacent-large finished? [[[0 0] [">" 1]] [[0 0] ["v" 1]]])
          (get-final-distances-2 [max-x max-y])
          (remove nil?)
          (reduce min))))
@@ -122,4 +137,4 @@
                    "day17/test.txt" 94
                    "day17/test2.txt" 71
                    "day17/test3.txt" 19
-                   "day17/input.txt" 1067)                  ; Runs for 25 min -_-
+                   "day17/input.txt" 1067)
