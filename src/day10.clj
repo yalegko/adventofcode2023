@@ -15,6 +15,7 @@
        (map-indexed #(vector %1 (.indexOf %2 \S)))
        (remove #(= -1 (second %)))
        (first)))
+
 (defn adjacent [[x y]]
   (vector [(dec x) y] [(inc x) y] [x (dec y)] [x (inc y)]))
 
