@@ -80,22 +80,22 @@
 (defn z3= [a b]
   (z3/mkEq *context* a b))
 
-(defn z3+ [& args]
-  (z3/mkAdd *context* (into-array ArithExpr args)))
+(defn z3+ [a b]
+  (z3/mkBVAdd *context* a b))
 
-(defn z3* [& args]
-  (z3/mkMul *context* (into-array ArithExpr args)))
+(defn z3* [a b]
+  (z3/mkBVMul *context* a b))
 
 (defn z3> [a b]
-  (z3/mkGt *context* a b))
+  (z3/mkBVUGE *context* a b))
 
 (defn z3i [x]
   (if (string? x)
-    (.mkIntConst *context* x)
-    (.mkInt *context* x)))
+    (z3/mkBVConst *context* x 64)
+    (z3/mkBV *context* x 64)))
 
 (defn z3-solve [& constraints]
-  (let [solver (.mkSolver *context*)
+  (let [solver (z3/mkSolver *context*)
         status (z3-solver/check solver constraints)]
     (case (.name status)
       "SATISFIABLE" (z3-solver/getModel solver)
@@ -103,7 +103,7 @@
       "UNKNOWN" (throw (ex-info "UNKNOWN" {:reason (.getUnknownReason solver)})))))
 
 (defn z3-eval [model s]
-  (.getInt64 (.eval model s false)))
+  (.getBigInteger (.eval model s false)))
 
 (defn make-equation [l1 l2]
   (let [t (z3i (str "t-" (random-uuid)))]
@@ -112,15 +112,17 @@
      (z3= (z3+ (:y0 l1) (z3* (:ky l1) t)) (z3+ (:y0 l2) (z3* (:ky l2) t)))
      (z3= (z3+ (:z0 l1) (z3* (:kz l1) t)) (z3+ (:z0 l2) (z3* (:kz l2) t)))]))
 
-(defn solve2 [input]
+(defn solve2 [input skip get]
   (let [trajectories (read-trajectories input)]
     (with-bindings {#'*context* (z3/context)}
       (let [rock (->> [:kx :ky :kz :x0 :y0 :z0]
                       (map #(vector % (z3i (name %))))
                       (into {}))
             model (->> trajectories
-                       (drop 3)
-                       (take 3)
+                       ; TODO We need to find some lines which forms 2 intersecting planes
+                       ;  too exhausted to do it algorithmically.
+                       (drop skip)
+                       (take get)
                        (map #(update-vals % z3i))
                        (mapcat #(make-equation rock %))
                        (apply z3-solve))]
@@ -129,6 +131,6 @@
              (map #(z3-eval model %))
              (reduce +))))))
 
-(test/are [in out] (= out (time (solve2 in)))
-                   "day24/test.txt" 37
-                   "day24/input.txt" 769840447420960)
+(test/are [in s t out] (= out (time (solve2 in s t)))
+                       "day24/test.txt" 0 5 47
+                       "day24/input.txt" 3 3 769840447420960)
