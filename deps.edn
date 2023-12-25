@@ -1,1 +1,4 @@
-{:deps {}}
+{:deps {
+        tools.aqua/z3-turnkey                    {:mvn/version "4.12.2.1"}
+        org.clojars.bkushigian/clj-z3            {:mvn/version "0.1.0-SNAPSHOT"}
+        com.clojure-goes-fast/clj-async-profiler {:mvn/version "1.1.1"}}}
